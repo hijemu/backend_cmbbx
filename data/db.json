@@ -1,0 +1,32 @@
+{
+  "users": [
+    {
+      "id": 1780745810257,
+      "name": "Jhem",
+      "email": "joboyjhem12@gmail.com",
+      "password_hash": "$2b$10$N.o7NP0Npr22qEaob8OfwO1r7kYB7L.jXLg6.sX98hkiDhS6Ajn/m",
+      "role": "organizer",
+      "created_at": "2026-06-06T11:36:50.356Z"
+    }
+  ],
+  "challonge_connections": [
+    {
+      "id": 1780745894659,
+      "created_at": "2026-06-06T11:38:14.659Z",
+      "user_id": 1780745810257,
+      "access_token": "eyJhbGciOiJIUzUxMiJ9.eyJpc3MiOiJDZW50cmFsIE1hbmlsYSB4IElsb2NvcyBFbGl0ZXMgQ2hhbGxvbmdlIEh1YiIsImp0aSI6ImE4NjExMzhhLWM4NTctNDg1Yi04OWUwLWI3YjJkZjQwOWRiYSIsImlhdCI6MTc4MDc0NTg5NCwiZXhwIjoxNzgxMzUwNjk0LCJ1c2VyIjp7ImlkIjozMzQ5MjYwLCJlbWFpbCI6ImpvYm95amhlbTI0QGdtYWlsLmNvbSIsImFwcGxpY2F0aW9uX2lkIjo1Nzg4NiwiZ3JhbnVsYXJfcGVybWlzc2lvbiI6bnVsbH19.10GyBjA-nR5ZFpgc0s9IU3cN6whTNNLbSBrKqWNdFVrqYZv49SGzoAK97kdBWb1B4J2GnJt6ytvP0mvn1SoeyQ",
+      "refresh_token": "52753659e9270b25942487231e7a594bda0fb8d994cd7ca370c670be71d605e5",
+      "token_type": "Bearer",
+      "scope": "me tournaments:read tournaments:write matches:read matches:write participants:read participants:write",
+      "expires_at": "2026-06-13T11:38:14.659Z",
+      "updated_at": "2026-06-06T11:38:14.659Z"
+    }
+  ],
+  "oauth_states": [
+    {
+      "state": "c492c61325aa74d45b6d14653bf5d8b7e0e616361dc52b0c",
+      "user_id": 1780745810257,
+      "created_at": "2026-06-06T11:36:54.988Z"
+    }
+  ]
+}
