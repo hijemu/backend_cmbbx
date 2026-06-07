@@ -41,39 +41,17 @@ router.post('/', requireAuth, async (req, res) => {
       tie_breaks,
       ranking,
       finals_cut,
+      swiss_rounds,
+      round_robin_iterations,
     } = req.body || {};
 
     if (!name || !url) {
       return res.status(400).json({ error: 'name and url are required' });
     }
 
-    const defaultTieBreaks = [
-      'points difference',
-      'points scored',
-      'median buchholz',
-    ];
-
-    const selectedTieBreaks =
-      Array.isArray(tie_breaks) && tie_breaks.length > 0
-        ? tie_breaks.filter(Boolean)
-        : defaultTieBreaks;
-
-    if (mode === 'v1') {
-      const response = await client.post('/tournaments.json', {
-        tournament: {
-          name,
-          url,
-          tournament_type,
-          game_name,
-          description,
-        },
-      });
-
-      return res.json(response.data);
-    }
-
     const isSwissToSingleElim = tournament_type === 'swiss_single_elim';
-    const isRoundRobinToSingleElim = tournament_type === 'round_robin_single_elim';
+    const isRoundRobinToSingleElim =
+      tournament_type === 'round_robin_single_elim';
 
     const challongeTournamentType = isSwissToSingleElim
       ? 'swiss'
@@ -81,46 +59,119 @@ router.post('/', requireAuth, async (req, res) => {
         ? 'round robin'
         : tournament_type;
 
-    const twoStageMeta = isSwissToSingleElim || isRoundRobinToSingleElim
-      ? `\n\n[BBX_TWO_STAGE:${JSON.stringify({
-        enabled: true,
-        stage1_type: challongeTournamentType,
-        stage2_type: 'single elimination',
-        finals_cut: Number(finals_cut) || 8,
-      })}]`
-      : '';
+    const safeSwissRounds = Math.max(
+      1,
+      Math.min(Number(swiss_rounds) || 5, 20)
+    );
+
+    const safeRoundRobinIterations = Math.max(
+      1,
+      Math.min(Number(round_robin_iterations) || 1, 3)
+    );
+
+    const safeFinalsCut = [4, 8, 16].includes(Number(finals_cut))
+      ? Number(finals_cut)
+      : 8;
+
+    const twoStageMeta =
+      isSwissToSingleElim || isRoundRobinToSingleElim
+        ? {
+          enabled: true,
+          original_type: tournament_type,
+          stage1_type: challongeTournamentType,
+          stage2_type: 'single elimination',
+          finals_cut: safeFinalsCut,
+          stage2_tournament_id: null,
+        }
+        : null;
+
+    const defaultTieBreaks = [
+      'points difference',
+      'points scored',
+      'median buchholz',
+    ];
+
+    const allowedTieBreaks = [
+      'points difference',
+      'points scored',
+      'median buchholz',
+    ];
+
+    const selectedTieBreaks =
+      Array.isArray(tie_breaks) && tie_breaks.length > 0
+        ? tie_breaks.filter((tb) => allowedTieBreaks.includes(tb))
+        : defaultTieBreaks;
+
+    const finalTieBreaks =
+      selectedTieBreaks.length > 0 ? selectedTieBreaks : defaultTieBreaks;
+
+    const safeDescription = String(description || '').trim();
+
+    const descriptionWithMeta = twoStageMeta
+      ? `${safeDescription}\n\n[BBX_TWO_STAGE:${JSON.stringify(twoStageMeta)}]`
+      : safeDescription;
+
+    if (mode === 'v1') {
+      const response = await client.post('/tournaments.json', {
+        tournament: {
+          name,
+          url,
+          tournament_type: challongeTournamentType,
+          game_name,
+          description: descriptionWithMeta,
+        },
+      });
+
+      return res.json(response.data);
+    }
 
     const attributes = {
       name,
       url,
       tournament_type: challongeTournamentType,
       game_name,
-      description: `${description || ''}${twoStageMeta}`,
+      description: descriptionWithMeta,
     };
 
     if (challongeTournamentType === 'round robin') {
       attributes.round_robin_options = {
         ranking: ranking || 'match wins',
-        iterations: 1,
+        iterations: safeRoundRobinIterations,
         pts_for_match_win: 1,
         pts_for_match_tie: 0.5,
         pts_for_game_win: 0,
         pts_for_game_tie: 0,
       };
 
-      attributes.tie_breaks = selectedTieBreaks;
+      attributes.tie_breaks = finalTieBreaks;
     }
 
     if (challongeTournamentType === 'swiss') {
       attributes.swiss_options = {
+        rounds: safeSwissRounds,
+        pts_for_bye: 1,
         pts_for_match_win: 1,
         pts_for_match_tie: 0.5,
         pts_for_game_win: 0,
         pts_for_game_tie: 0,
       };
 
-      attributes.tie_breaks = selectedTieBreaks;
+      attributes.tie_breaks = finalTieBreaks;
     }
+
+    console.log(
+      'CREATE TOURNAMENT PAYLOAD:',
+      JSON.stringify(
+        {
+          data: {
+            type: 'tournament',
+            attributes,
+          },
+        },
+        null,
+        2
+      )
+    );
 
     const response = await client.post('/tournaments.json', {
       data: {
@@ -129,7 +180,12 @@ router.post('/', requireAuth, async (req, res) => {
       },
     });
 
-    res.json(normalizeTournament(response.data.data));
+    const normalized = normalizeTournament(response.data.data);
+
+    res.json({
+      ...normalized,
+      two_stage: twoStageMeta,
+    });
   } catch (err) {
     console.log(
       'CREATE TOURNAMENT ERROR:',
