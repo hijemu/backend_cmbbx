@@ -84,10 +84,24 @@ router.get('/callback', async (req, res) => {
     });
 
     saveConnection(stateRow.user_id, tokenResponse.data);
-    return res.redirect(`${APP_URL}/connect-challonge?connected=1`);
+    return res.send(`
+      <html>
+        <body style="font-family:sans-serif;text-align:center;padding:40px;">
+          <h2>You succeeded dumb fuck.</h2>
+          <p>You can now return to the app.</p>
+        </body>
+      </html>
+    `);
   } catch (err) {
     const msg = err.response?.data?.error_description || err.response?.data?.error || err.message;
-    return res.redirect(`${APP_URL}/connect-challonge?connected=0&error=${encodeURIComponent(msg)}`);
+    return res.send(`
+     <html>
+       <body style="font-family:sans-serif;text-align:center;padding:40px;">
+         <h2>Di ka makapasok kasi nigga ka.</h2>
+         <p>${msg}</p>
+       </body>
+     </html>
+`    );
   }
 });
 
