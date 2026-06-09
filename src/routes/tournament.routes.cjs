@@ -53,11 +53,17 @@ router.post('/', requireAuth, async (req, res) => {
     const isRoundRobinToSingleElim =
       tournament_type === 'round_robin_single_elim';
 
-    const challongeTournamentType = isSwissToSingleElim
+    const isTwoStage = isSwissToSingleElim || isRoundRobinToSingleElim;
+
+    const groupStageType = isSwissToSingleElim
       ? 'swiss'
       : isRoundRobinToSingleElim
         ? 'round robin'
-        : tournament_type;
+        : null;
+
+    const challongeTournamentType = isTwoStage
+      ? 'single elimination'
+      : tournament_type;
 
     const safeSwissRounds = Math.max(
       1,
@@ -72,18 +78,6 @@ router.post('/', requireAuth, async (req, res) => {
     const safeFinalsCut = [4, 8, 16].includes(Number(finals_cut))
       ? Number(finals_cut)
       : 8;
-
-    const twoStageMeta =
-      isSwissToSingleElim || isRoundRobinToSingleElim
-        ? {
-          enabled: true,
-          original_type: tournament_type,
-          stage1_type: challongeTournamentType,
-          stage2_type: 'single elimination',
-          finals_cut: safeFinalsCut,
-          stage2_tournament_id: null,
-        }
-        : null;
 
     const defaultTieBreaks = [
       'points difference',
@@ -104,6 +98,16 @@ router.post('/', requireAuth, async (req, res) => {
 
     const finalTieBreaks =
       selectedTieBreaks.length > 0 ? selectedTieBreaks : defaultTieBreaks;
+
+    const twoStageMeta = isTwoStage
+      ? {
+        enabled: true,
+        original_type: tournament_type,
+        stage1_type: groupStageType,
+        stage2_type: 'single elimination',
+        finals_cut: safeFinalsCut,
+      }
+      : null;
 
     const safeDescription = String(description || '').trim();
 
@@ -133,7 +137,43 @@ router.post('/', requireAuth, async (req, res) => {
       description: descriptionWithMeta,
     };
 
-    if (challongeTournamentType === 'round robin') {
+    if (isTwoStage) {
+      attributes.group_stage_enabled = true;
+
+      attributes.group_stage_options = {
+        stage_type: groupStageType,
+        group_size: 999,
+        participant_count_to_advance_per_group: safeFinalsCut,
+      };
+
+      if (groupStageType === 'round robin') {
+        attributes.group_stage_options.round_robin_options = {
+          ranking: ranking || 'match wins',
+          iterations: safeRoundRobinIterations,
+          pts_for_match_win: 1,
+          pts_for_match_tie: 0.5,
+          pts_for_game_win: 0,
+          pts_for_game_tie: 0,
+        };
+
+        attributes.group_stage_options.tie_breaks = finalTieBreaks;
+      }
+
+      if (groupStageType === 'swiss') {
+        attributes.group_stage_options.swiss_options = {
+          rounds: safeSwissRounds,
+          pts_for_bye: 1,
+          pts_for_match_win: 1,
+          pts_for_match_tie: 0.5,
+          pts_for_game_win: 0,
+          pts_for_game_tie: 0,
+        };
+
+        attributes.group_stage_options.tie_breaks = finalTieBreaks;
+      }
+    }
+
+    if (!isTwoStage && challongeTournamentType === 'round robin') {
       attributes.round_robin_options = {
         ranking: ranking || 'match wins',
         iterations: safeRoundRobinIterations,
@@ -146,7 +186,7 @@ router.post('/', requireAuth, async (req, res) => {
       attributes.tie_breaks = finalTieBreaks;
     }
 
-    if (challongeTournamentType === 'swiss') {
+    if (!isTwoStage && challongeTournamentType === 'swiss') {
       attributes.swiss_options = {
         rounds: safeSwissRounds,
         pts_for_bye: 1,
@@ -466,14 +506,33 @@ router.post('/:id/start', requireAuth, async (req, res) => {
       return res.json(response.data);
     }
 
-    const response = await client.put(`/tournaments/${req.params.id}/change_state.json`, {
-      data: {
-        type: 'TournamentState',
-        attributes: {
-          state: 'start',
+    let response;
+
+    try {
+      response = await client.put(`/tournaments/${req.params.id}/change_state.json`, {
+        data: {
+          type: 'TournamentState',
+          attributes: {
+            state: 'start',
+          },
         },
-      },
-    });
+      });
+    } catch (err) {
+      const detail = JSON.stringify(err.response?.data || {});
+
+      if (detail.includes('group stage')) {
+        response = await client.put(`/tournaments/${req.params.id}/change_state.json`, {
+          data: {
+            type: 'TournamentState',
+            attributes: {
+              state: 'start_group_stage',
+            },
+          },
+        });
+      } else {
+        throw err;
+      }
+    }
 
     return res.json({
       success: true,
@@ -641,6 +700,88 @@ router.get('/:id/debug', requireAuth, async (req, res) => {
     res.json(response.data);
   } catch (err) {
     res.status(500).json(err.response?.data || err.message);
+  }
+});
+
+router.post('/:id/start-group-stage', requireAuth, async (req, res) => {
+  try {
+    const { mode, client } = await legacyOrV2Client(req.user.id);
+
+    if (mode === 'v1') {
+      return res.status(400).json({
+        error: 'Group stage actions require Challonge v2 OAuth mode.',
+      });
+    }
+
+    const response = await client.put(
+      `/tournaments/${req.params.id}/change_state.json`,
+      {
+        data: {
+          type: 'TournamentState',
+          attributes: {
+            state: 'start_group_stage',
+          },
+        },
+      }
+    );
+
+    return res.json({
+      success: true,
+      status: response.status,
+      data: response.data || {},
+    });
+  } catch (err) {
+    console.log(
+      'START GROUP STAGE ERROR:',
+      err.response?.status,
+      JSON.stringify(err.response?.data || {}, null, 2)
+    );
+
+    res.status(err.response?.status || 500).json({
+      error: err.message,
+      details: err.response?.data || null,
+    });
+  }
+});
+
+router.post('/:id/finalize-group-stage', requireAuth, async (req, res) => {
+  try {
+    const { mode, client } = await legacyOrV2Client(req.user.id);
+
+    if (mode === 'v1') {
+      return res.status(400).json({
+        error: 'Group stage actions require Challonge v2 OAuth mode.',
+      });
+    }
+
+    const response = await client.put(
+      `/tournaments/${req.params.id}/change_state.json`,
+      {
+        data: {
+          type: 'TournamentState',
+          attributes: {
+            state: 'finalize_group_stage',
+          },
+        },
+      }
+    );
+
+    return res.json({
+      success: true,
+      status: response.status,
+      data: response.data || {},
+    });
+  } catch (err) {
+    console.log(
+      'FINALIZE GROUP STAGE ERROR:',
+      err.response?.status,
+      JSON.stringify(err.response?.data || {}, null, 2)
+    );
+
+    res.status(err.response?.status || 500).json({
+      error: err.message,
+      details: err.response?.data || null,
+    });
   }
 });
 
