@@ -3,7 +3,7 @@ const { requireAuth } = require('./middleware/auth.cjs');
 const {
   legacyOrV2Client,
   listAll,
-} = require('../services/challonge.service.cjs');
+} = require('./services/challonge.service.cjs');
 const { normalizeMatch } = require('./utils/normalizers.cjs');
 
 const router = express.Router();
