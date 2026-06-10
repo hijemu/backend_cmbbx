@@ -4,7 +4,7 @@ const cors = require('cors');
 const authRoutes = require('./routes/auth.routes.cjs');
 const challongeRoutes = require('./routes/challonge.routes.cjs');
 const tournamentRoutes = require('./routes/tournament.routes.cjs');
-const roomRoutes = require('./src/routes/room.routes.cjs');
+const roomRoutes = require('./routes/room.routes');
 
 const app = express();
 
