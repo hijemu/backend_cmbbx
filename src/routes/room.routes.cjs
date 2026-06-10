@@ -138,9 +138,34 @@ router.get('/:tournamentId/matches', async (req, res) => {
       return res.json(response.data);
     }
 
-    const rows = await listAll(client, `/tournaments/${tournamentId}/matches.json`);
+    const [matchRows, participantRows] = await Promise.all([
+      listAll(client, `/tournaments/${tournamentId}/matches.json`),
+      listAll(client, `/tournaments/${tournamentId}/participants.json`),
+    ]);
+    
+    const participantMap = new Map(
+      participantRows.map((row) => {
+        const id = String(row?.id || row?.data?.id || '');
+        const attrs = row?.attributes || row?.data?.attributes || {};
+        return [id, attrs.name || attrs.display_name || attrs.username || `Player ${id}`];
+      })
+    );
+    
+    const normalized = matchRows.map((row) => {
+      const item = normalizeMatch(row, tournamentId);
+      const match = item.match || item;
+    
+      const p1 = String(match.player1_id || '');
+      const p2 = String(match.player2_id || '');
+    
+      match.player1_name = participantMap.get(p1) || '';
+      match.player2_name = participantMap.get(p2) || '';
+    
+      return item;
+    });
+    
+    res.json(normalized);
 
-    res.json(rows.map((row) => normalizeMatch(row, tournamentId)));
   } catch (err) {
     res.status(err.response?.status || 500).json({
       error: err.message,
