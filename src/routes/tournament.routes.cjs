@@ -42,6 +42,7 @@ router.post('/', requireAuth, async (req, res) => {
       ranking,
       finals_cut,
       swiss_rounds,
+      swissRounds,
       round_robin_iterations,
     } = req.body || {};
 
@@ -67,7 +68,7 @@ router.post('/', requireAuth, async (req, res) => {
 
     const safeSwissRounds = Math.max(
       1,
-      Math.min(Number(swiss_rounds) || 5, 20)
+      Math.min(Number(swiss_rounds || swissRounds) || 5, 20)
     );
 
     const safeRoundRobinIterations = Math.max(
