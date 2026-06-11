@@ -104,8 +104,35 @@ async function legacyOrV2Client(userId) {
 }
 
 async function listAll(client, url, params = {}) {
-  const response = await client.get(url, { params });
-  return Array.isArray(response.data?.data) ? response.data.data : response.data;
+  const all = [];
+  let page = 1;
+  const perPage = 100;
+
+  while (true) {
+    const response = await client.get(url, {
+      params: {
+        ...params,
+        page,
+        per_page: perPage,
+      },
+    });
+
+    const rows = Array.isArray(response.data?.data)
+      ? response.data.data
+      : Array.isArray(response.data)
+        ? response.data
+        : [];
+
+    all.push(...rows);
+
+    if (rows.length < perPage) {
+      break;
+    }
+
+    page += 1;
+  }
+
+  return all;
 }
 
 module.exports = {
